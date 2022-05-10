@@ -129,8 +129,8 @@ class BinLogStreamReader(object):
 
     def __init__(self, connection_settings, server_id,
                  ctl_connection_settings=None, resume_stream=False,
-                 blocking=False, only_events=None, log_file=None,
-                 log_pos=None, end_log_pos=None,
+                 blocking=False, only_events=None,
+                 end_log_pos=None,
                  filter_non_implemented_events=True,
                  ignored_events=None, auto_position=None,
                  only_tables=None, ignored_tables=None,
@@ -140,7 +140,8 @@ class BinLogStreamReader(object):
                  pymysql_wrapper=None,
                  fail_on_table_metadata_unavailable=False,
                  slave_heartbeat=None,
-                 is_mariadb=False):
+                 is_mariadb=False,
+                 position_tracker=None):
         """
         Attributes:
             ctl_connection_settings: Connection settings for cluster holding
@@ -151,9 +152,6 @@ class BinLogStreamReader(object):
                       send EOF instead of blocking connection.
             only_events: Array of allowed events
             ignored_events: Array of ignored events
-            log_file: Set replication start log file
-            log_pos: Set replication start log pos (resume_stream should be
-                     true)
             end_log_pos: Set replication end log pos
             auto_position: Use master_auto_position gtid to set position
             only_tables: An array with the tables you want to watch (only works
@@ -209,12 +207,11 @@ class BinLogStreamReader(object):
 
         # Store table meta information
         self.table_map = {}
-        self.log_pos = log_pos
         self.end_log_pos = end_log_pos
-        self.log_file = log_file
         self.auto_position = auto_position
         self.skip_to_timestamp = skip_to_timestamp
         self.is_mariadb = is_mariadb
+        self._position_tracker = position_tracker
 
         if end_log_pos:
             self.is_past_end_log_pos = False
@@ -626,3 +623,19 @@ class BinLogStreamReader(object):
             packet = self._stream_connection._read_packet()
 
         return packet
+
+    @property
+    def log_pos(self):
+        return self._position_tracker.binary_log_position
+
+    @log_pos.setter
+    def log_pos(self, new_pos):
+        self._position_tracker.binary_log_position = new_pos
+
+    @property
+    def log_file(self):
+        return self._position_tracker.binary_log_file
+
+    @log_file.setter
+    def log_file(self, new_file):
+        self._position_tracker.binary_log_file = new_file
