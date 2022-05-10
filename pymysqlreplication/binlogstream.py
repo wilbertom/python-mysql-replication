@@ -269,14 +269,8 @@ class BinLogStreamReader(object):
 
         packet = self.report_slave.encoded(self.__server_id)
 
-        if pymysql.__version__ < LooseVersion("0.6"):
-            self._stream_connection.wfile.write(packet)
-            self._stream_connection.wfile.flush()
-            self._stream_connection.read_packet()
-        else:
-            self._stream_connection._write_bytes(packet)
-            self._stream_connection._next_seq_id = 1
-            self._stream_connection._read_packet()
+        self._write_to_stream(packet)
+        self._read_from_stream()
 
     def __connect_to_stream(self):
         # log_pos (4) -- position in the binlog-file to start the stream with
@@ -454,12 +448,7 @@ class BinLogStreamReader(object):
                 # encoded_data
                 prelude += gtid_set.encoded()
 
-        if pymysql.__version__ < LooseVersion("0.6"):
-            self._stream_connection.wfile.write(prelude)
-            self._stream_connection.wfile.flush()
-        else:
-            self._stream_connection._write_bytes(prelude)
-            self._stream_connection._next_seq_id = 1
+        self._write_to_stream(prelude)
         self.__connected_stream = True
 
     def fetchone(self):
@@ -474,10 +463,7 @@ class BinLogStreamReader(object):
                 self.__connect_to_ctl()
 
             try:
-                if pymysql.__version__ < LooseVersion("0.6"):
-                    pkt = self._stream_connection.read_packet()
-                else:
-                    pkt = self._stream_connection._read_packet()
+                pkt = self._read_from_stream()
             except pymysql.OperationalError as error:
                 code, message = error.args
                 if code in MYSQL_EXPECTED_ERROR_CODES:
@@ -624,3 +610,19 @@ class BinLogStreamReader(object):
 
     def __iter__(self):
         return iter(self.fetchone, None)
+
+    def _write_to_stream(self, data):
+        if pymysql.__version__ < LooseVersion("0.6"):
+            self._stream_connection.wfile.write(data)
+            self._stream_connection.wfile.flush()
+        else:
+            self._stream_connection._write_bytes(data)
+            self._stream_connection._next_seq_id = 1
+
+    def _read_from_stream(self):
+        if pymysql.__version__ < LooseVersion("0.6"):
+            packet = self._stream_connection.read_packet()
+        else:
+            packet = self._stream_connection._read_packet()
+
+        return packet
